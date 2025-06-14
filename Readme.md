@@ -27,8 +27,3 @@ pyinstaller --onefile hardware_info.py
 ```
 
 El ejecutable quedará en la carpeta `dist/` y podrás ejecutarlo como cualquier aplicación de Windows.
-
-### Ejecutable precompilado
-
-Este entorno no permite generar el `.exe` directamente, así que el repositorio no incluye el binario.
-Puedes crear el archivo en tu propia PC siguiendo los pasos anteriores en una terminal de Windows.
