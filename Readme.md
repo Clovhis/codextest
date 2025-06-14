@@ -23,6 +23,6 @@ python system_hardware_inspector.py
 ## Compilar a .exe
 Instala PyInstaller y ejecuta:
 ```bash
-pyinstaller --onefile --windowed --icon=icon.ico system_hardware_inspector.py
+pyinstaller --onefile --windowed system_hardware_inspector.py
 ```
 El ejecutable aparecerá en la carpeta `dist`.
