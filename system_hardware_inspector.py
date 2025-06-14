@@ -61,24 +61,43 @@ def get_ram_info() -> str:
 
 
 def get_disk_info() -> str:
+    """Return information about system disks including a basic type guess."""
     disks = []
-    partitions = psutil.disk_partitions()
-    for p in partitions:
+
+    if wmi:
         try:
-            usage = psutil.disk_usage(p.mountpoint)
-            size = format_bytes(usage.total)
-        except PermissionError:
-            size = "N/A"
-        disk_type = ""
-        if wmi:
+            c = wmi.WMI()
+            for disk in c.Win32_DiskDrive():
+                model = disk.Model or disk.Caption
+                try:
+                    size = format_bytes(int(disk.Size))
+                except Exception:
+                    size = "N/A"
+
+                interface = (disk.InterfaceType or "").upper()
+                model_upper = model.upper()
+
+                if "NVME" in interface or "NVME" in model_upper:
+                    disk_type = "NVMe"
+                elif "SSD" in model_upper:
+                    disk_type = "SSD"
+                else:
+                    disk_type = "HDD"
+
+                disks.append(f"{model} - {size} - {disk_type}")
+        except Exception:
+            disks = []
+
+    if not disks:
+        partitions = psutil.disk_partitions()
+        for p in partitions:
             try:
-                c = wmi.WMI()
-                for disk in c.Win32_LogicalDisk(VolumeName=p.device):
-                    disk_type = disk.MediaType or ""
-                    break
-            except Exception:
-                disk_type = ""
-        disks.append(f"{p.device} ({p.mountpoint}) - {size} {disk_type}")
+                usage = psutil.disk_usage(p.mountpoint)
+                size = format_bytes(usage.total)
+            except PermissionError:
+                size = "N/A"
+            disks.append(f"{p.device} ({p.mountpoint}) - {size}")
+
     return "Disks:\n" + "\n".join(disks)
 
 
@@ -163,8 +182,8 @@ class MainWindow(QtWidgets.QMainWindow):
         palette.setColor(QtGui.QPalette.ToolTipBase, QtCore.Qt.white)
         palette.setColor(QtGui.QPalette.ToolTipText, QtCore.Qt.white)
         palette.setColor(QtGui.QPalette.Text, QtCore.Qt.white)
-        palette.setColor(QtGui.QPalette.Button, QtGui.QColor(53, 53, 53))
-        palette.setColor(QtGui.QPalette.ButtonText, QtCore.Qt.white)
+        palette.setColor(QtGui.QPalette.Button, QtGui.QColor(255, 255, 255))
+        palette.setColor(QtGui.QPalette.ButtonText, QtCore.Qt.black)
         palette.setColor(QtGui.QPalette.BrightText, QtCore.Qt.red)
         palette.setColor(QtGui.QPalette.Link, QtGui.QColor(42, 130, 218))
         palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor(42, 130, 218))
