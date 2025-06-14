@@ -56,6 +56,40 @@ def get_cpu_info() -> str:
 
 
 def get_ram_info() -> str:
+    """Return detailed RAM information including brand, type, speed and size."""
+    if wmi:
+        try:
+            c = wmi.WMI()
+            modules = c.Win32_PhysicalMemory()
+            if modules:
+                lines = []
+                total = 0
+                type_map = {
+                    20: "DDR",
+                    21: "DDR2",
+                    24: "DDR3",
+                    26: "DDR4",
+                    34: "DDR5",
+                }
+                for m in modules:
+                    manufacturer = (m.Manufacturer or "Unknown").strip()
+                    mem_type_val = (
+                        getattr(m, "SMBIOSMemoryType", None)
+                        or getattr(m, "MemoryType", None)
+                    )
+                    mem_type = type_map.get(int(mem_type_val), "Unknown") if mem_type_val else "Unknown"
+                    speed = (
+                        f"{int(m.Speed)} MHz" if getattr(m, "Speed", None) else "N/A"
+                    )
+                    size = int(getattr(m, "Capacity", 0) or 0)
+                    total += size
+                    lines.append(
+                        f"{manufacturer} - {mem_type} - {speed} - {format_bytes(size)}"
+                    )
+                lines.append(f"RAM Total: {format_bytes(total)}")
+                return "\n".join(lines)
+        except Exception:
+            pass
     mem = psutil.virtual_memory()
     return f"RAM Total: {format_bytes(mem.total)}"
 

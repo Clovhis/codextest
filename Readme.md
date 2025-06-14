@@ -1,6 +1,7 @@
 # System Hardware Inspector
 
 Este repositorio incluye un script en Python que muestra la información de hardware del sistema en una interfaz gráfica moderna basada en PyQt5.
+La aplicación detalla ahora la marca, tipo, velocidad y capacidad de cada módulo de memoria RAM.
 
 ## Requisitos
 - Python 3.8+
