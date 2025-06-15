@@ -12,6 +12,7 @@ import os
 import platform
 import hashlib
 import json
+import logging
 from datetime import date
 from pathlib import Path
 
@@ -21,6 +22,13 @@ from openai import AzureOpenAI
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 import psutil
+
+APP_VERSION = "0.0.2"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 
 try:
     import wmi
@@ -285,13 +293,16 @@ def run_ai_analysis(hardware_info: str) -> str:
     """Send hardware info to Azure OpenAI and return its response."""
     _load_secure_env()
     client = _create_ai_client()
+    model_name = "gpt-4o-mini"
+    logging.info("Usando modelo de IA %s", model_name)
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=model_name,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": hardware_info},
         ],
     )
+    logging.info("Respuesta recibida de la IA")
     return response.choices[0].message.content.strip()
 
 
@@ -408,26 +419,31 @@ class AIWorker(QtCore.QThread):
 
     def run(self) -> None:
         try:
-            self.progress.emit(0, "Recolectando información del sistema...")
+            logging.info("Iniciando recolecci\u00f3n de hardware")
+            self.progress.emit(0, "Recolectando informaci\u00f3n del sistema...")
             hardware = gather_hardware_info()
 
-            self.progress.emit(25, "Cargando modelo de IA...")
+            logging.info("Conectando a OpenAI")
+            self.progress.emit(25, "Cargando modelo de IA (gpt-4o-mini)...")
             recommendations = run_ai_analysis(hardware)
 
+            logging.info("Generando PDF")
             self.progress.emit(75, "Exportando reporte en PDF...")
             pdf_path = export_pdf(hardware, recommendations)
 
+            logging.info("Proceso completado")
             self.progress.emit(100, "Listo")
             self.finished.emit(str(pdf_path))
         except Exception as exc:
+            logging.exception("Error en el hilo de IA")
             self.error.emit(str(exc))
 
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("System Hardware Inspector")
-        self.resize(600, 400)
+        self.setWindowTitle(f"System Hardware Inspector v{APP_VERSION}")
+        self.resize(800, 600)
         self.setup_ui()
         self.set_dark_theme()
         self.worker = None
@@ -438,10 +454,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.text_edit = QtWidgets.QTextEdit()
         self.text_edit.setReadOnly(True)
+        self.text_edit.setStyleSheet("font-size: 14px;")
 
         scan_btn = QtWidgets.QPushButton("Escanear hardware")
         save_btn = QtWidgets.QPushButton("Guardar como TXT")
         self.ai_btn = QtWidgets.QPushButton("Analizar con Inteligencia Artificial")
+        btn_style = "font-size: 14px; padding: 8px;"
+        scan_btn.setStyleSheet(btn_style)
+        save_btn.setStyleSheet(btn_style)
         self.ai_btn.setStyleSheet(
             "background-color: #f39c12; color: white; font-size: 16px;"
         )
@@ -450,6 +470,10 @@ class MainWindow(QtWidgets.QMainWindow):
         scan_btn.clicked.connect(self.scan_hardware)
         save_btn.clicked.connect(self.save_to_txt)
         self.ai_btn.clicked.connect(self.start_ai_analysis)
+
+        scan_btn.clicked.connect(lambda: self.animate_button(scan_btn))
+        save_btn.clicked.connect(lambda: self.animate_button(save_btn))
+        self.ai_btn.clicked.connect(lambda: self.animate_button(self.ai_btn))
 
         button_layout = QtWidgets.QHBoxLayout()
         button_layout.addWidget(scan_btn)
@@ -460,10 +484,18 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.text_edit)
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setValue(0)
+        self.progress_bar.setStyleSheet(
+            "QProgressBar::chunk { background-color: #f39c12; }"
+        )
         self.progress_label = QtWidgets.QLabel()
+        self.progress_label.setStyleSheet("font-size: 12px; color: white;")
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.progress_label)
         layout.addWidget(self.ai_btn, alignment=QtCore.Qt.AlignRight)
+        footer = QtWidgets.QLabel("By Clovhis")
+        footer.setAlignment(QtCore.Qt.AlignCenter)
+        footer.setStyleSheet("color: #f39c12;")
+        layout.addWidget(footer)
 
     def set_dark_theme(self):
         palette = QtGui.QPalette()
@@ -477,8 +509,8 @@ class MainWindow(QtWidgets.QMainWindow):
         palette.setColor(QtGui.QPalette.Button, QtGui.QColor(255, 255, 255))
         palette.setColor(QtGui.QPalette.ButtonText, QtCore.Qt.black)
         palette.setColor(QtGui.QPalette.BrightText, QtCore.Qt.red)
-        palette.setColor(QtGui.QPalette.Link, QtGui.QColor(42, 130, 218))
-        palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor(42, 130, 218))
+        palette.setColor(QtGui.QPalette.Link, QtGui.QColor(243, 156, 18))
+        palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor(243, 156, 18))
         palette.setColor(QtGui.QPalette.HighlightedText, QtCore.Qt.black)
         self.setPalette(palette)
 
@@ -530,9 +562,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ai_btn.setEnabled(True)
         QtWidgets.QMessageBox.critical(self, "Error", message)
 
+    def animate_button(self, button: QtWidgets.QPushButton) -> None:
+        rect = button.geometry()
+        bigger = rect.adjusted(-5, -5, 5, 5)
+        animation = QtCore.QPropertyAnimation(button, b"geometry")
+        animation.setDuration(200)
+        animation.setStartValue(rect)
+        animation.setKeyValueAt(0.5, bigger)
+        animation.setEndValue(rect)
+        animation.start(QtCore.QAbstractAnimation.DeleteWhenStopped)
+        button._animation = animation
+
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
+    app.setFont(QtGui.QFont("Arial", 12))
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
