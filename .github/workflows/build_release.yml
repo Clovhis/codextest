@@ -1,0 +1,46 @@
+name: Build and release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller PyQt5 psutil wmi GPUtil cryptography fpdf openai
+
+      - name: Create .env from secrets
+        run: |
+          echo AZURE_OPENAI_API_KEY=${{ secrets.AZURE_OPENAI_API_KEY }} >> .env
+          echo AZURE_OPENAI_ENDPOINT=${{ secrets.AZURE_OPENAI_ENDPOINT }} >> .env
+          echo AZURE_OPENAI_API_VERSION=${{ secrets.AZURE_OPENAI_API_VERSION }} >> .env
+
+      - name: Generate secure credentials
+        run: python setup_keys.py
+
+      - name: Build executable
+        run: |
+          pyinstaller --onefile --windowed ^
+            --add-data '.env.secure;.' --add-data '.key;.' ^
+            system_hardware_inspector.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: system_hardware_inspector
+          path: dist/system_hardware_inspector.exe
+
+      - name: Upload executable to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/system_hardware_inspector.exe
