@@ -8,8 +8,16 @@
 #   The executable will be generated in the 'dist' folder.
 
 import sys
+import os
 import platform
+import hashlib
+import json
+from datetime import date
 from pathlib import Path
+
+from cryptography.fernet import Fernet
+from fpdf import FPDF
+from openai import AzureOpenAI
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 import psutil
@@ -226,6 +234,111 @@ def gather_hardware_info() -> str:
     return info
 
 
+def _load_secure_env(secure_path: Path = Path(".env.secure"), key_path: Path = Path(".key")) -> None:
+    """Load encrypted environment variables into os.environ."""
+    if not secure_path.exists() or not key_path.exists():
+        raise FileNotFoundError("Archivos de credenciales no encontrados")
+
+    with key_path.open("rb") as kf:
+        key = kf.read()
+    fernet = Fernet(key)
+    with secure_path.open("rb") as sf:
+        decrypted = fernet.decrypt(sf.read())
+
+    for line in decrypted.decode().splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1)
+            os.environ[k.strip()] = v.strip()
+
+
+def _create_ai_client() -> AzureOpenAI:
+    """Return configured AzureOpenAI client using loaded env vars."""
+    return AzureOpenAI(
+        api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
+        api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
+        azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
+    )
+
+
+SYSTEM_PROMPT = (
+    "Sos un asistente argentino con buena onda. Dedicado a ayudar a gamers con "
+    "presupuestos limitados. Tu tarea es recomendar mejoras al hardware actual "
+    "con una excelente relación costo-beneficio, priorizando componentes que se "
+    "consigan en Argentina. Evaluá CPU, GPU, RAM y almacenamiento. Indicá marcas, "
+    "modelos, gamas y precios estimados en pesos argentinos."
+)
+
+
+def run_ai_analysis(hardware_info: str) -> str:
+    """Send hardware info to Azure OpenAI and return its response."""
+    _load_secure_env()
+    client = _create_ai_client()
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": hardware_info},
+        ],
+    )
+    return response.choices[0].message.content.strip()
+
+
+def export_pdf(hardware_info: str, recommendations: str, output: Path = Path("reporte_gamer_ai.pdf")) -> Path:
+    """Generate a PDF report using FPDF."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(True, 15)
+
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "Reporte Gamer AI", ln=True, align="C")
+
+    pdf.set_font("Helvetica", size=12)
+    pdf.cell(0, 10, f"Fecha: {date.today().isoformat()}", ln=True)
+    pdf.ln(4)
+
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, "Hardware detectado", ln=True)
+    pdf.set_font("Helvetica", size=11)
+    for line in hardware_info.splitlines():
+        pdf.multi_cell(0, 8, line)
+    pdf.ln(4)
+
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, "Recomendaciones", ln=True)
+    pdf.set_font("Helvetica", size=11)
+    for line in recommendations.splitlines():
+        pdf.multi_cell(0, 8, line)
+
+    pdf.output(str(output))
+    return output
+
+
+def _system_hash() -> str:
+    """Create a simple hardware-based hash to track usage."""
+    base = f"{platform.node()}_{get_cpu_full_name()}_{platform.system()}"
+    return hashlib.sha256(base.encode()).hexdigest()
+
+
+def can_use_ai_today(log_path: Path = Path("usage_log.json")) -> bool:
+    """Return True if the AI button can be used today, updating log."""
+    identifier = _system_hash()
+    today = date.today().isoformat()
+    data = {}
+    if log_path.exists():
+        try:
+            data = json.loads(log_path.read_text())
+        except Exception:
+            data = {}
+
+    last_use = data.get(identifier)
+    if last_use == today:
+        return False
+
+    data[identifier] = today
+    log_path.write_text(json.dumps(data))
+    return True
+
+
 def generate_gaming_suggestions() -> str:
     """Devuelve sugerencias argentas para potenciar el rendimiento gamer."""
     suggestions = []
@@ -270,6 +383,30 @@ def generate_gaming_suggestions() -> str:
     return "\n".join(suggestions)
 
 
+class AIWorker(QtCore.QThread):
+    """Thread to run the AI analysis without freezing the UI."""
+
+    progress = QtCore.pyqtSignal(int, str)
+    finished = QtCore.pyqtSignal(str)
+    error = QtCore.pyqtSignal(str)
+
+    def run(self) -> None:
+        try:
+            self.progress.emit(0, "Recolectando información del sistema...")
+            hardware = gather_hardware_info()
+
+            self.progress.emit(25, "Cargando modelo de IA...")
+            recommendations = run_ai_analysis(hardware)
+
+            self.progress.emit(75, "Exportando reporte en PDF...")
+            pdf_path = export_pdf(hardware, recommendations)
+
+            self.progress.emit(100, "Listo")
+            self.finished.emit(str(pdf_path))
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -277,6 +414,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(600, 400)
         self.setup_ui()
         self.set_dark_theme()
+        self.worker = None
 
     def setup_ui(self):
         central = QtWidgets.QWidget()
@@ -287,12 +425,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
         scan_btn = QtWidgets.QPushButton("Escanear hardware")
         save_btn = QtWidgets.QPushButton("Guardar como TXT")
-        suggest_btn = QtWidgets.QPushButton("Sugerencia")
-        suggest_btn.setStyleSheet("background-color: #f39c12; color: white;")
+        self.ai_btn = QtWidgets.QPushButton("Analizar con Inteligencia Artificial")
+        self.ai_btn.setStyleSheet(
+            "background-color: #f39c12; color: white; font-size: 16px;"
+        )
+        self.ai_btn.setFixedHeight(50)
 
         scan_btn.clicked.connect(self.scan_hardware)
         save_btn.clicked.connect(self.save_to_txt)
-        suggest_btn.clicked.connect(self.show_suggestions)
+        self.ai_btn.clicked.connect(self.start_ai_analysis)
 
         button_layout = QtWidgets.QHBoxLayout()
         button_layout.addWidget(scan_btn)
@@ -301,7 +442,12 @@ class MainWindow(QtWidgets.QMainWindow):
         layout = QtWidgets.QVBoxLayout(central)
         layout.addLayout(button_layout)
         layout.addWidget(self.text_edit)
-        layout.addWidget(suggest_btn, alignment=QtCore.Qt.AlignRight)
+        self.progress_bar = QtWidgets.QProgressBar()
+        self.progress_bar.setValue(0)
+        self.progress_label = QtWidgets.QLabel()
+        layout.addWidget(self.progress_bar)
+        layout.addWidget(self.progress_label)
+        layout.addWidget(self.ai_btn, alignment=QtCore.Qt.AlignRight)
 
     def set_dark_theme(self):
         palette = QtGui.QPalette()
@@ -333,9 +479,40 @@ class MainWindow(QtWidgets.QMainWindow):
             f.write(text)
         QtWidgets.QMessageBox.information(self, "Guardado", f"Información guardada en {path.resolve()}")
 
-    def show_suggestions(self):
-        suggestions = generate_gaming_suggestions()
-        QtWidgets.QMessageBox.information(self, "Sugerencias", suggestions)
+    def start_ai_analysis(self):
+        """Launch AI analysis if daily limit allows it."""
+        if not can_use_ai_today():
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Límite alcanzado",
+                "Ya utilizaste el análisis con IA hoy. Intentá mañana.",
+            )
+            return
+
+        self.worker = AIWorker()
+        self.worker.progress.connect(self.update_progress)
+        self.worker.finished.connect(self.analysis_finished)
+        self.worker.error.connect(self.analysis_error)
+        self.ai_btn.setEnabled(False)
+        self.progress_bar.setValue(0)
+        self.progress_label.setText("")
+        self.worker.start()
+
+    def update_progress(self, value: int, message: str) -> None:
+        self.progress_bar.setValue(value)
+        self.progress_label.setText(message)
+
+    def analysis_finished(self, pdf_path: str) -> None:
+        self.ai_btn.setEnabled(True)
+        QtWidgets.QMessageBox.information(
+            self,
+            "Reporte generado",
+            f"Reporte guardado en {Path(pdf_path).resolve()}",
+        )
+
+    def analysis_error(self, message: str) -> None:
+        self.ai_btn.setEnabled(True)
+        QtWidgets.QMessageBox.critical(self, "Error", message)
 
 
 def main():
