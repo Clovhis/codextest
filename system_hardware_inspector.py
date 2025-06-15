@@ -25,6 +25,42 @@ except ImportError:
     GPUtil = None
 
 
+def get_cpu_full_name() -> str:
+    """Return full CPU name across platforms."""
+    if wmi:
+        try:
+            c = wmi.WMI()
+            procs = c.Win32_Processor()
+            if procs:
+                name = procs[0].Name
+                if name:
+                    return name.strip()
+        except Exception:
+            pass
+
+    system = platform.system()
+    if system == "Linux":
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if line.lower().startswith("model name"):
+                        return line.split(":", 1)[1].strip()
+        except Exception:
+            pass
+    elif system == "Darwin":
+        import subprocess
+
+        try:
+            output = subprocess.check_output(
+                ["sysctl", "-n", "machdep.cpu.brand_string"], text=True
+            )
+            return output.strip()
+        except Exception:
+            pass
+
+    return platform.processor() or platform.uname().processor
+
+
 def format_bytes(size: int) -> str:
     """Return size in human-readable format."""
     power = 1024
@@ -39,6 +75,7 @@ def format_bytes(size: int) -> str:
 def get_cpu_info() -> str:
     uname = platform.uname()
     cpu_model = uname.processor or platform.processor()
+    full_name = get_cpu_full_name()
     cores_physical = psutil.cpu_count(logical=False)
     cores_logical = psutil.cpu_count(logical=True)
     freq = psutil.cpu_freq()
@@ -48,6 +85,7 @@ def get_cpu_info() -> str:
         freq_info = "N/A"
     info = [
         f"CPU: {cpu_model}",
+        f"Nombre completo: {full_name}",
         f"Cores (Physical): {cores_physical}",
         f"Cores (Logical): {cores_logical}",
         f"Frequency: {freq_info}",
@@ -167,6 +205,14 @@ def get_motherboard_info() -> str:
     return "Motherboard information not available"
 
 
+def get_os_info() -> str:
+    """Return the user's operating system."""
+    system = platform.system()
+    release = platform.release()
+    version = platform.version()
+    return f"Sistema Operativo: {system} {release} ({version})"
+
+
 def gather_hardware_info() -> str:
     sections = [
         get_cpu_info(),
@@ -175,7 +221,9 @@ def gather_hardware_info() -> str:
         get_gpu_info(),
         get_motherboard_info(),
     ]
-    return "\n\n".join(sections)
+    info = "\n\n".join(sections)
+    info += f"\n\n{get_os_info()}"
+    return info
 
 
 def generate_gaming_suggestions() -> str:
