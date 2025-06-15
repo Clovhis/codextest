@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller PyQt5 psutil wmi GPUtil cryptography fpdf openai
+          pip install pyinstaller pyqt5 psutil wmi GPUtil cryptography fpdf openai
 
       - name: Create .env from secrets
         run: |
@@ -41,9 +41,9 @@ jobs:
       - name: Build executable
         shell: pwsh
         run: |
-          pyinstaller --onefile --windowed `
-            --add-data '.env.secure;.' `
-            --add-data '.key;.' `
+          pyinstaller --onefile --windowed --icon=icon.ico `
+            --add-data ".env.secure;." `
+            --add-data ".key;." `
             system_hardware_inspector.py
 
       - name: Upload artifact
@@ -56,3 +56,5 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: dist/system_hardware_inspector.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
