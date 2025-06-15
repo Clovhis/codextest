@@ -9,10 +9,22 @@ La aplicación detalla ahora la marca, tipo, velocidad y capacidad de cada módu
 - psutil
 - wmi (solo Windows)
 - GPUtil
+- openai
+- fpdf2
 
 Instala las dependencias con:
 ```bash
-pip install PyQt5 psutil wmi GPUtil
+pip install PyQt5 psutil wmi GPUtil openai fpdf2
+```
+
+Antes de ejecutar la opción de análisis con IA, configurá las siguientes
+variables de entorno con tus credenciales de Azure OpenAI:
+
+```bash
+set AZURE_OPENAI_API_KEY=tu_clave
+set AZURE_OPENAI_ENDPOINT=https://tu-endpoint.openai.azure.com/
+set AZURE_OPENAI_API_VERSION=2024-02-15-preview
+# En Linux o macOS usá `export` en lugar de `set`.
 ```
 
 ## Ejecución

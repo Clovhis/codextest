@@ -10,6 +10,14 @@
 import sys
 import platform
 from pathlib import Path
+import json
+import hashlib
+from datetime import datetime, date
+import subprocess
+import os
+
+from fpdf import FPDF
+from openai import AzureOpenAI
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 import psutil
@@ -226,6 +234,85 @@ def gather_hardware_info() -> str:
     return info
 
 
+USAGE_LOG = Path("usage_log.json")
+
+SYSTEM_PROMPT = (
+    "Sos un asistente argentino con buena onda. Dedicado a ayudar a gamers con presupuestos limitados. Tu tarea es recomendar mejoras al hardware actual con una excelente relación costo-beneficio, priorizando componentes que se consigan en Argentina. Evaluá CPU, GPU, RAM y almacenamiento. Indicá marcas, modelos, gamas y precios estimados en pesos argentinos."
+)
+
+
+def create_openai_client() -> AzureOpenAI:
+    """Return an AzureOpenAI client configured via environment variables."""
+    key = os.getenv("AZURE_OPENAI_API_KEY")
+    version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+    if not key or not endpoint:
+        raise ValueError(
+            "Azure OpenAI credentials not configured. Please set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT."
+        )
+    return AzureOpenAI(api_key=key, api_version=version, azure_endpoint=endpoint)
+
+
+def compute_hardware_hash() -> str:
+    """Return a stable hash representing this machine."""
+    base = "|".join(
+        [get_cpu_full_name(), get_ram_info(), get_gpu_info(), get_motherboard_info()]
+    )
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+
+def load_usage_log() -> dict:
+    if USAGE_LOG.exists():
+        try:
+            with USAGE_LOG.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def save_usage_log(data: dict) -> None:
+    with USAGE_LOG.open("w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def create_pdf(hardware_info: str, recommendations: str, path: Path) -> None:
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "Informe de Análisis Gamer con Inteligencia Artificial", ln=1, align="C")
+    pdf.ln(5)
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(0, 10, f"Fecha del análisis: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=1)
+    pdf.ln(3)
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Información de hardware", ln=1)
+    pdf.set_font("Arial", "", 12)
+    for line in hardware_info.splitlines():
+        pdf.multi_cell(0, 8, line)
+    pdf.ln(3)
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "Recomendaciones", ln=1)
+    pdf.set_font("Arial", "", 12)
+    for line in recommendations.splitlines():
+        pdf.multi_cell(0, 8, line)
+    pdf.output(str(path))
+
+
+def open_pdf_file(path: Path) -> bool:
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(str(path))  # type: ignore[attr-defined]
+        elif sys.platform.startswith("darwin"):
+            subprocess.Popen(["open", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path)])
+        return True
+    except Exception:
+        return False
+
+
 def generate_gaming_suggestions() -> str:
     """Devuelve sugerencias argentas para potenciar el rendimiento gamer."""
     suggestions = []
@@ -270,6 +357,53 @@ def generate_gaming_suggestions() -> str:
     return "\n".join(suggestions)
 
 
+class AIAnalysisThread(QtCore.QThread):
+    progress = QtCore.pyqtSignal(str, int)
+    finished_signal = QtCore.pyqtSignal(str)
+    error = QtCore.pyqtSignal(str)
+
+    def __init__(self, hardware_hash: str, parent: QtCore.QObject | None = None):
+        super().__init__(parent)
+        self.hardware_hash = hardware_hash
+
+    def run(self) -> None:
+        try:
+            self.progress.emit("Recolectando información del sistema...", 0)
+            hw_info = gather_hardware_info()
+
+            self.progress.emit("Conectando con el modelo de IA...", 1)
+            client = create_openai_client()
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": hw_info},
+            ]
+
+            self.progress.emit("Analizando datos...", 2)
+            resp = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
+            recommendation = resp.choices[0].message.content.strip()
+
+            self.progress.emit("Generando recomendaciones personalizadas...", 3)
+            path = Path("reporte_gamer_ai.pdf")
+            create_pdf(hw_info, recommendation, path)
+
+            self.progress.emit("Creando informe en PDF...", 4)
+            self.finished_signal.emit(str(path))
+        except Exception as e:  # pragma: no cover - network/IO errors
+            self.error.emit(str(e))
+
+
+class ProgressDialog(QtWidgets.QDialog):
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Analizando con IA...")
+        layout = QtWidgets.QVBoxLayout(self)
+        self.label = QtWidgets.QLabel("Iniciando...")
+        self.bar = QtWidgets.QProgressBar()
+        self.bar.setRange(0, 5)
+        layout.addWidget(self.label)
+        layout.addWidget(self.bar)
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -277,6 +411,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(600, 400)
         self.setup_ui()
         self.set_dark_theme()
+        self.check_ai_usage()
 
     def setup_ui(self):
         central = QtWidgets.QWidget()
@@ -287,12 +422,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
         scan_btn = QtWidgets.QPushButton("Escanear hardware")
         save_btn = QtWidgets.QPushButton("Guardar como TXT")
-        suggest_btn = QtWidgets.QPushButton("Sugerencia")
-        suggest_btn.setStyleSheet("background-color: #f39c12; color: white;")
+        self.ai_btn = QtWidgets.QPushButton("Analizar con Inteligencia Artificial")
+        self.ai_btn.setStyleSheet(
+            "background-color: #f39c12; color: white; font-weight: bold; font-size: 16px; padding: 10px;"
+        )
+        self.ai_btn.setFixedHeight(40)
 
         scan_btn.clicked.connect(self.scan_hardware)
         save_btn.clicked.connect(self.save_to_txt)
-        suggest_btn.clicked.connect(self.show_suggestions)
+        self.ai_btn.clicked.connect(self.start_ai_analysis)
 
         button_layout = QtWidgets.QHBoxLayout()
         button_layout.addWidget(scan_btn)
@@ -301,7 +439,55 @@ class MainWindow(QtWidgets.QMainWindow):
         layout = QtWidgets.QVBoxLayout(central)
         layout.addLayout(button_layout)
         layout.addWidget(self.text_edit)
-        layout.addWidget(suggest_btn, alignment=QtCore.Qt.AlignRight)
+        layout.addWidget(self.ai_btn, alignment=QtCore.Qt.AlignRight)
+
+    def check_ai_usage(self) -> bool:
+        self.hardware_hash = compute_hardware_hash()
+        log = load_usage_log()
+        today = date.today().isoformat()
+        if log.get(self.hardware_hash) == today:
+            self.ai_btn.setEnabled(False)
+            return False
+        self.ai_btn.setEnabled(True)
+        return True
+
+    def start_ai_analysis(self) -> None:
+        if not self.check_ai_usage():
+            QtWidgets.QMessageBox.information(
+                self, "Aviso", "El análisis con IA ya se realizó hoy." 
+            )
+            return
+
+        self.progress_dialog = ProgressDialog(self)
+        self.progress_dialog.show()
+
+        self.thread = AIAnalysisThread(self.hardware_hash)
+        self.thread.progress.connect(self.update_progress)
+        self.thread.finished_signal.connect(self.ai_finished)
+        self.thread.error.connect(self.ai_error)
+        self.thread.start()
+
+    def update_progress(self, message: str, step: int) -> None:
+        self.progress_dialog.label.setText(message)
+        self.progress_dialog.bar.setValue(step + 1)
+
+    def ai_finished(self, pdf_path: str) -> None:
+        self.progress_dialog.close()
+        log = load_usage_log()
+        log[self.hardware_hash] = date.today().isoformat()
+        save_usage_log(log)
+
+        if not open_pdf_file(Path(pdf_path)):
+            QtWidgets.QMessageBox.information(
+                self,
+                "Informe generado",
+                f"Reporte guardado en {Path(pdf_path).resolve()}",
+            )
+        self.check_ai_usage()
+
+    def ai_error(self, message: str) -> None:
+        self.progress_dialog.close()
+        QtWidgets.QMessageBox.critical(self, "Error", message)
 
     def set_dark_theme(self):
         palette = QtGui.QPalette()
