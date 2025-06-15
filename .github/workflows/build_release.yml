@@ -29,9 +29,11 @@ jobs:
         run: python setup_keys.py
 
       - name: Build executable
+        shell: pwsh
         run: |
-          pyinstaller --onefile --windowed ^
-            --add-data '.env.secure;.' --add-data '.key;.' ^
+          pyinstaller --onefile --windowed `
+            --add-data '.env.secure;.' `
+            --add-data '.key;.' `
             system_hardware_inspector.py
 
       - name: Upload artifact
