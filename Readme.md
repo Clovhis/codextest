@@ -9,11 +9,19 @@ La aplicación detalla ahora la marca, tipo, velocidad y capacidad de cada módu
 - psutil
 - wmi (solo Windows)
 - GPUtil
+- openai
+- fpdf2
 
 Instala las dependencias con:
 ```bash
-pip install PyQt5 psutil wmi GPUtil
+pip install PyQt5 psutil wmi GPUtil openai fpdf2 cryptography
 ```
+
+Antes de ejecutar la aplicación debes generar un archivo cifrado con las
+credenciales de Azure OpenAI. Ejecuta una sola vez el script
+`generate_credentials.py` y completa los datos solicitados. Esto creará los
+archivos `azure_credentials.enc` y `credentials.key` que **no** deberían
+compartirse ni subirse al repositorio.
 
 ## Ejecución
 ```bash
