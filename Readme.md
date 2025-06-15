@@ -45,3 +45,8 @@ pyinstaller --onefile --windowed \
     --add-data ".env.secure;." --add-data ".key;." \
     system_hardware_inspector.py
 ```
+También podés usar el mismo comando en una sola línea en PowerShell:
+
+```powershell
+pyinstaller --onefile --windowed --add-data ".env.secure;." --add-data ".key;." system_hardware_inspector.py
+```

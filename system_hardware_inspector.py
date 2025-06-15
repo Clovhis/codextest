@@ -297,6 +297,10 @@ def run_ai_analysis(hardware_info: str) -> str:
 
 def export_pdf(hardware_info: str, recommendations: str, output: Path = Path("reporte_gamer_ai.pdf")) -> Path:
     """Generate a PDF report using FPDF."""
+    def _sanitize(text: str) -> str:
+        """Remove characters unsupported by FPDF's latin-1 encoding."""
+        return text.encode("latin-1", errors="replace").decode("latin-1")
+
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(True, 15)
@@ -311,14 +315,14 @@ def export_pdf(hardware_info: str, recommendations: str, output: Path = Path("re
     pdf.set_font("Helvetica", "B", 14)
     pdf.cell(0, 10, "Hardware detectado", ln=True)
     pdf.set_font("Helvetica", size=11)
-    for line in hardware_info.splitlines():
+    for line in _sanitize(hardware_info).splitlines():
         pdf.multi_cell(0, 8, line)
     pdf.ln(4)
 
     pdf.set_font("Helvetica", "B", 14)
     pdf.cell(0, 10, "Recomendaciones", ln=True)
     pdf.set_font("Helvetica", size=11)
-    for line in recommendations.splitlines():
+    for line in _sanitize(recommendations).splitlines():
         pdf.multi_cell(0, 8, line)
 
     pdf.output(str(output))
