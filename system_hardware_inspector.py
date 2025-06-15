@@ -234,8 +234,20 @@ def gather_hardware_info() -> str:
     return info
 
 
+def _resource_path(name: str) -> Path:
+    """Return absolute path to resource, compatible with PyInstaller."""
+    if getattr(sys, "frozen", False):
+        base = Path(sys._MEIPASS)
+    else:
+        base = Path(__file__).resolve().parent
+    return base / name
+
+
 def _load_secure_env(secure_path: Path = Path(".env.secure"), key_path: Path = Path(".key")) -> None:
     """Load encrypted environment variables into os.environ."""
+    secure_path = _resource_path(secure_path.name)
+    key_path = _resource_path(key_path.name)
+
     if not secure_path.exists() or not key_path.exists():
         raise FileNotFoundError("Archivos de credenciales no encontrados")
 

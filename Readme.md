@@ -36,3 +36,12 @@ Instala PyInstaller y ejecuta:
 pyinstaller --onefile --windowed system_hardware_inspector.py
 ```
 El ejecutable aparecerá en la carpeta `dist`.
+
+Para que el binario pueda cargar las credenciales, copiá los archivos
+`.env.secure` y `.key` junto al `.exe` o agregalos al momento de compilar:
+
+```bash
+pyinstaller --onefile --windowed \
+    --add-data ".env.secure;." --add-data ".key;." \
+    system_hardware_inspector.py
+```
