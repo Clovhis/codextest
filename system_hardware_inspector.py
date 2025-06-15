@@ -178,6 +178,50 @@ def gather_hardware_info() -> str:
     return "\n\n".join(sections)
 
 
+def generate_gaming_suggestions() -> str:
+    """Devuelve sugerencias argentas para potenciar el rendimiento gamer."""
+    suggestions = []
+
+    freq = psutil.cpu_freq()
+    if freq and freq.current < 3000:
+        suggestions.append("Cambiá el micro por uno más picante.")
+
+    mem = psutil.virtual_memory()
+    if mem.total < 8 * 1024 ** 3:
+        suggestions.append("Meté más RAM que estás cortina para juegos.")
+
+    gpu_detected = False
+    if GPUtil:
+        try:
+            gpus = GPUtil.getGPUs()
+            if gpus:
+                gpu_detected = True
+                if gpus[0].memoryTotal < 4:
+                    suggestions.append(
+                        "Poné una placa con mínimo 4 GB de VRAM y vas a ir de diez."
+                    )
+        except Exception:
+            pass
+
+    if not gpu_detected and wmi:
+        try:
+            c = wmi.WMI()
+            gpus = c.Win32_VideoController()
+            gpu_detected = bool(gpus)
+        except Exception:
+            pass
+
+    if not gpu_detected:
+        suggestions.append(
+            "Clavale una placa de video dedicada si querés que rinda posta."
+        )
+
+    if not suggestions:
+        suggestions.append("Tu PC ya está bastante pulenta para jugar.")
+
+    return "\n".join(suggestions)
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -195,9 +239,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         scan_btn = QtWidgets.QPushButton("Escanear hardware")
         save_btn = QtWidgets.QPushButton("Guardar como TXT")
+        suggest_btn = QtWidgets.QPushButton("Sugerencia")
+        suggest_btn.setStyleSheet("background-color: #f39c12; color: white;")
 
         scan_btn.clicked.connect(self.scan_hardware)
         save_btn.clicked.connect(self.save_to_txt)
+        suggest_btn.clicked.connect(self.show_suggestions)
 
         button_layout = QtWidgets.QHBoxLayout()
         button_layout.addWidget(scan_btn)
@@ -206,6 +253,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout = QtWidgets.QVBoxLayout(central)
         layout.addLayout(button_layout)
         layout.addWidget(self.text_edit)
+        layout.addWidget(suggest_btn, alignment=QtCore.Qt.AlignRight)
 
     def set_dark_theme(self):
         palette = QtGui.QPalette()
@@ -236,6 +284,10 @@ class MainWindow(QtWidgets.QMainWindow):
         with path.open("w", encoding="utf-8") as f:
             f.write(text)
         QtWidgets.QMessageBox.information(self, "Guardado", f"Información guardada en {path.resolve()}")
+
+    def show_suggestions(self):
+        suggestions = generate_gaming_suggestions()
+        QtWidgets.QMessageBox.information(self, "Sugerencias", suggestions)
 
 
 def main():
