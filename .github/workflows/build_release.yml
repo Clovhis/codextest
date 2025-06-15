@@ -30,7 +30,11 @@ jobs:
 
       - name: Build executable
         shell: pwsh
-        run: pyinstaller --onefile --windowed --add-data ".env.secure;." --add-data ".key;." system_hardware_inspector.py
+        run: |
+          pyinstaller --onefile --windowed `
+            --add-data '.env.secure;.' `
+            --add-data '.key;.' `
+            system_hardware_inspector.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
