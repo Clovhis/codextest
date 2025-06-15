@@ -31,6 +31,13 @@ jobs:
       - name: Generate secure credentials
         run: python setup_keys.py
 
+      - name: Verify generated secure files
+        run: |
+          echo "Contenido de .env.secure:"
+          type .env.secure
+          echo "Contenido de .key:"
+          type .key
+
       - name: Build executable
         shell: pwsh
         run: |
