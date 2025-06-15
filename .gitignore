@@ -1,0 +1,5 @@
+# Archivos con credenciales cifradas (no versionar)
+.env.secure
+.key
+__pycache__/
+*.pyc
