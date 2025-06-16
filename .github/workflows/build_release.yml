@@ -4,6 +4,9 @@ on:
   release:
     types: [created]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -17,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller PyQt5 psutil wmi GPUtil cryptography fpdf openai
+          pip install pyinstaller pyqt5 psutil wmi GPUtil cryptography fpdf openai
 
       - name: Create .env from secrets
         run: |
@@ -27,6 +30,13 @@ jobs:
 
       - name: Generate secure credentials
         run: python setup_keys.py
+
+      - name: Verify generated secure files
+        run: |
+          echo "Contenido de .env.secure:"
+          type .env.secure
+          echo "Contenido de .key:"
+          type .key
 
       - name: Build executable
         shell: pwsh
@@ -46,3 +56,5 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: dist/system_hardware_inspector.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
