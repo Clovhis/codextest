@@ -41,7 +41,7 @@ jobs:
       - name: Build executable
         shell: pwsh
         run: |
-          pyinstaller --onefile --windowed --icon=icon.ico `
+          pyinstaller --onefile --windowed `
             --add-data ".env.secure;." `
             --add-data ".key;." `
             system_hardware_inspector.py
