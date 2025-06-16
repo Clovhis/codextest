@@ -42,8 +42,8 @@ jobs:
         shell: pwsh
         run: |
           pyinstaller --onefile --windowed `
-            --add-data ".env.secure;." `
-            --add-data ".key;." `
+            --add-data '.env.secure;.' `
+            --add-data '.key;.' `
             system_hardware_inspector.py
 
       - name: Upload artifact
