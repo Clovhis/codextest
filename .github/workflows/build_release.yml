@@ -46,15 +46,27 @@ jobs:
             --add-data ".key;." `
             system_hardware_inspector.py
 
+      - name: Test executable with debug
+        shell: pwsh
+        run: |
+          .\dist\system_hardware_inspector.exe --debug || echo "Test ejecutado (ignore exit code)"
+
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          Copy-Item .env.secure dist/
+          Copy-Item .key dist/
+          Compress-Archive -Path dist\* -DestinationPath system_hardware_inspector_portable.zip
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: system_hardware_inspector
           path: dist/system_hardware_inspector.exe
 
-      - name: Upload executable to release
+      - name: Upload portable zip to release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/system_hardware_inspector.exe
+          files: system_hardware_inspector_portable.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
