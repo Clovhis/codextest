@@ -379,7 +379,7 @@ class AIWorker(QtCore.QThread):
     """Thread to run the AI analysis without freezing the UI."""
 
     progress = QtCore.pyqtSignal(int, str)
-    finished = QtCore.pyqtSignal(str)
+    finished = QtCore.pyqtSignal(str, str)  # recommendations, pdf path
     error = QtCore.pyqtSignal(str)
 
     def run(self) -> None:
@@ -401,7 +401,7 @@ class AIWorker(QtCore.QThread):
 
             logging.info("Proceso completado")
             self.progress.emit(100, "Listo")
-            self.finished.emit(str(pdf_path))
+            self.finished.emit(recommendations, str(pdf_path))
         except Exception as exc:
             logging.exception("Error en el hilo de IA")
             self.error.emit(str(exc))
@@ -415,41 +415,45 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setup_ui()
         self.set_dark_theme()
         self.worker = None
+        self.scan_hardware()
 
     def setup_ui(self):
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
 
-        self.text_edit = QtWidgets.QTextEdit()
-        self.text_edit.setReadOnly(True)
-        self.text_edit.setStyleSheet("font-size: 14px;")
+        self.hardware_edit = QtWidgets.QTextEdit()
+        self.hardware_edit.setReadOnly(True)
+        self.hardware_edit.setStyleSheet("font-size: 14px;")
 
-        scan_btn = QtWidgets.QPushButton("Escanear hardware")
+        self.reco_edit = QtWidgets.QTextEdit()
+        self.reco_edit.setReadOnly(True)
+        self.reco_edit.setStyleSheet("font-size: 14px;")
+
         save_btn = QtWidgets.QPushButton("Guardar como TXT")
         self.ai_btn = QtWidgets.QPushButton("Analizar con Inteligencia Artificial")
         btn_style = "font-size: 14px; padding: 8px;"
-        scan_btn.setStyleSheet(btn_style)
         save_btn.setStyleSheet(btn_style)
         self.ai_btn.setStyleSheet(
             "background-color: #f39c12; color: white; font-size: 16px;"
         )
         self.ai_btn.setFixedHeight(50)
 
-        scan_btn.clicked.connect(self.scan_hardware)
         save_btn.clicked.connect(self.save_to_txt)
         self.ai_btn.clicked.connect(self.start_ai_analysis)
 
-        scan_btn.clicked.connect(lambda: self.animate_button(scan_btn))
         save_btn.clicked.connect(lambda: self.animate_button(save_btn))
         self.ai_btn.clicked.connect(lambda: self.animate_button(self.ai_btn))
 
         button_layout = QtWidgets.QHBoxLayout()
-        button_layout.addWidget(scan_btn)
         button_layout.addWidget(save_btn)
+
+        text_layout = QtWidgets.QHBoxLayout()
+        text_layout.addWidget(self.hardware_edit)
+        text_layout.addWidget(self.reco_edit)
 
         layout = QtWidgets.QVBoxLayout(central)
         layout.addLayout(button_layout)
-        layout.addWidget(self.text_edit)
+        layout.addLayout(text_layout)
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setValue(0)
         self.progress_bar.setStyleSheet(
@@ -467,15 +471,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def set_dark_theme(self):
         palette = QtGui.QPalette()
-        palette.setColor(QtGui.QPalette.Window, QtGui.QColor(53, 53, 53))
+        palette.setColor(QtGui.QPalette.Window, QtGui.QColor(20, 20, 30))
         palette.setColor(QtGui.QPalette.WindowText, QtCore.Qt.white)
-        palette.setColor(QtGui.QPalette.Base, QtGui.QColor(25, 25, 25))
-        palette.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor(53, 53, 53))
+        palette.setColor(QtGui.QPalette.Base, QtGui.QColor(30, 30, 40))
+        palette.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor(45, 45, 60))
         palette.setColor(QtGui.QPalette.ToolTipBase, QtCore.Qt.white)
         palette.setColor(QtGui.QPalette.ToolTipText, QtCore.Qt.white)
         palette.setColor(QtGui.QPalette.Text, QtCore.Qt.white)
-        palette.setColor(QtGui.QPalette.Button, QtGui.QColor(255, 255, 255))
-        palette.setColor(QtGui.QPalette.ButtonText, QtCore.Qt.black)
+        palette.setColor(QtGui.QPalette.Button, QtGui.QColor(45, 45, 60))
+        palette.setColor(QtGui.QPalette.ButtonText, QtCore.Qt.white)
         palette.setColor(QtGui.QPalette.BrightText, QtCore.Qt.red)
         palette.setColor(QtGui.QPalette.Link, QtGui.QColor(243, 156, 18))
         palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor(243, 156, 18))
@@ -484,10 +488,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def scan_hardware(self):
         info = gather_hardware_info()
-        self.text_edit.setPlainText(info)
+        self.hardware_edit.setPlainText(info)
 
     def save_to_txt(self):
-        text = self.text_edit.toPlainText()
+        text = self.hardware_edit.toPlainText()
         if not text:
             return
         path = Path("hardware_info.txt")
@@ -518,8 +522,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.progress_bar.setValue(value)
         self.progress_label.setText(message)
 
-    def analysis_finished(self, pdf_path: str) -> None:
+    def analysis_finished(self, recommendations: str, pdf_path: str) -> None:
         self.ai_btn.setEnabled(True)
+        self.reco_edit.setPlainText(recommendations)
+        QtWidgets.QApplication.beep()
         QtWidgets.QMessageBox.information(
             self,
             "Reporte generado",
@@ -528,6 +534,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def analysis_error(self, message: str) -> None:
         self.ai_btn.setEnabled(True)
+        QtWidgets.QApplication.beep()
         QtWidgets.QMessageBox.critical(self, "Error", message)
 
     def animate_button(self, button: QtWidgets.QPushButton) -> None:
