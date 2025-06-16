@@ -30,23 +30,11 @@ pip install PyQt5 psutil wmi GPUtil cryptography fpdf openai
 python system_hardware_inspector.py
 ```
 
-## Compilar a .exe
-Instala PyInstaller y ejecuta:
-```bash
-pyinstaller --onefile --windowed system_hardware_inspector.py
-```
-El ejecutable aparecerá en la carpeta `dist`.
+La aplicación registra toda la actividad en el archivo
+`system_hardware_inspector.log`, útil para depurar errores de conexión
+o fallos inesperados.
 
-Para que el binario pueda cargar las credenciales, copiá los archivos
-`.env.secure` y `.key` junto al `.exe` o agregalos al momento de compilar:
-
-```bash
-pyinstaller --onefile --windowed \
-    --add-data ".env.secure;." --add-data ".key;." \
-    system_hardware_inspector.py
-```
-También podés usar el mismo comando en una sola línea en PowerShell:
-
-```powershell
-pyinstaller --onefile --windowed --add-data ".env.secure;." --add-data ".key;." system_hardware_inspector.py
-```
+## Descargar la aplicación
+No es necesario compilar manualmente. Cada versión estable se publica
+como ejecutable en la sección **Releases** de GitHub. Solo descargá la
+última versión para tu sistema operativo y ejecutala.
