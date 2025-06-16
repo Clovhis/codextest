@@ -23,11 +23,16 @@ from openai import AzureOpenAI
 from PyQt5 import QtWidgets, QtGui, QtCore
 import psutil
 
-APP_VERSION = "0.0.2"
+APP_VERSION = "0.0.3"
 
+LOG_FILE = Path("system_hardware_inspector.log")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
 )
 
 try:
@@ -297,6 +302,7 @@ def run_ai_analysis(hardware_info: str) -> str:
     client = _create_ai_client()
     model_name = "gpt-4o-mini"
     logging.info("Usando modelo de IA %s", model_name)
+    logging.info("Enviando informaci\u00f3n a OpenAI")
     response = client.chat.completions.create(
         model=model_name,
         messages=[
@@ -368,49 +374,6 @@ def can_use_ai_today(log_path: Path = Path("usage_log.json")) -> bool:
     return True
 
 
-def generate_gaming_suggestions() -> str:
-    """Devuelve sugerencias argentas para potenciar el rendimiento gamer."""
-    suggestions = []
-
-    freq = psutil.cpu_freq()
-    if freq and freq.current < 3000:
-        suggestions.append("Cambiá el micro por uno más picante.")
-
-    mem = psutil.virtual_memory()
-    if mem.total < 8 * 1024 ** 3:
-        suggestions.append("Meté más RAM que estás cortina para juegos.")
-
-    gpu_detected = False
-    if GPUtil:
-        try:
-            gpus = GPUtil.getGPUs()
-            if gpus:
-                gpu_detected = True
-                if gpus[0].memoryTotal < 4:
-                    suggestions.append(
-                        "Poné una placa con mínimo 4 GB de VRAM y vas a ir de diez."
-                    )
-        except Exception:
-            pass
-
-    if not gpu_detected and wmi:
-        try:
-            c = wmi.WMI()
-            gpus = c.Win32_VideoController()
-            gpu_detected = bool(gpus)
-        except Exception:
-            pass
-
-    if not gpu_detected:
-        suggestions.append(
-            "Clavale una placa de video dedicada si querés que rinda posta."
-        )
-
-    if not suggestions:
-        suggestions.append("Tu PC ya está bastante pulenta para jugar.")
-
-    return "\n".join(suggestions)
-
 
 class AIWorker(QtCore.QThread):
     """Thread to run the AI analysis without freezing the UI."""
@@ -425,12 +388,15 @@ class AIWorker(QtCore.QThread):
             self.progress.emit(0, "Recolectando informaci\u00f3n del sistema...")
             hardware = gather_hardware_info()
 
-            logging.info("Conectando a OpenAI")
-            self.progress.emit(25, "Cargando modelo de IA (gpt-4o-mini)...")
+            logging.info("Conectando con OpenAI")
+            self.progress.emit(20, "Conectando con los servicios de OpenAI...")
+
+            self.progress.emit(40, "Esperando respuesta de OpenAI...")
             recommendations = run_ai_analysis(hardware)
 
+            self.progress.emit(60, "Evaluando hardware...")
             logging.info("Generando PDF")
-            self.progress.emit(75, "Exportando reporte en PDF...")
+            self.progress.emit(80, "Generando reporte en PDF...")
             pdf_path = export_pdf(hardware, recommendations)
 
             logging.info("Proceso completado")
