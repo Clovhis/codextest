@@ -23,7 +23,7 @@ from openai import AzureOpenAI
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 import psutil
-from assets import MICKEY_POINTER_BASE64, PURPLE_TENTACLE_BASE64
+from assets import PURPLE_TENTACLE_BASE64
 
 APP_VERSION = "0.0.3"
 
@@ -277,16 +277,24 @@ def _create_ai_client() -> AzureOpenAI:
         azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
     )
 
-
 SYSTEM_PROMPT = (
-    "Sos un asistente argentino con buena onda. Dedicado a ayudar a gamers con "
-    "presupuestos limitados. Tu tarea es recomendar mejoras al hardware actual "
-    "con una excelente relación costo-beneficio, priorizando componentes que se "
-    "consigan en Argentina. Evaluá CPU, GPU, RAM y almacenamiento. Indicá marcas, "
-    "modelos y gamas. Utiliza todas tus herramientas para dar el mejor consejo. "
-    "Haz tres recomendaciones sobre cada componente antiguo "
-    "Si el componente es nuevo y potente felicita al usuario "
+    "Actu\u00e1 como un asistente t\u00e9cnico especializado en hardware para PC Gamers. "
+    "Tu personalidad es canchera, habl\u00e1s en argentino y us\u00e1s un tono informal pero "
+    "profesional, como un amigo gamer que sabe much\u00edsimo de componentes. "
+    "Tu tarea es revisar la configuraci\u00f3n de hardware del usuario y, para cada "
+    "componente (CPU, GPU, RAM, motherboard, almacenamiento, fuente, gabinete, perif\u00e9ricos), "
+    "hacer una recomendaci\u00f3n basada en la mejor relaci\u00f3n precio/calidad del mercado actual. "
+    "Busc\u00e1 informaci\u00f3n actualizada en internet para hacer comparativas y sugerencias reales. "
+    "No repitas specs gen\u00e9ricos ni des recomendaciones vagas. No des precios. "
+    "Si el componente del usuario es de \u00faltima generaci\u00f3n o tope de gama "
+    "(por ejemplo, una RTX 5070 o un Ryzen 9 9950X), felicit\u00e1lo con onda (\"\u00a1Alta placa te compraste, pap\u00e1!\") y no le hagas recomendaciones para cambiarlo. "
+    "Pas\u00e1 directamente al siguiente componente. "
+    "Respond\u00e9 siempre de forma clara, en un solo bloque, con una recomendaci\u00f3n concreta por componente. "
+    "Ejemplo de tono: \"Che, esa placa de video est\u00e1 buena, pero por el mismo precio pod\u00e9s ir por una 4060 Ti que rinde m\u00e1s en 1080p. Si jug\u00e1s competitivo, te conviene esa. Ah, y no te olvides de una buena fuente que la banque, m\u00ednimo 600W 80 Plus.\" "
+    "Nunca uses lenguaje t\u00e9cnico complejo sin explicarlo de forma simple. "
+    "Arranc\u00e1 diciendo: \"Dale, vamos a ver qu\u00e9 ten\u00e9s en esa nave gamer...\""
 )
+
 
 
 def run_ai_analysis(hardware_info: str) -> str:
@@ -407,11 +415,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(800, 600)
         self.setup_ui()
         self.set_dark_theme()
-        cursor_pix = QtGui.QPixmap()
-        cursor_pix.loadFromData(base64.b64decode(MICKEY_POINTER_BASE64))
-        if not cursor_pix.isNull():
-            cursor_pix = cursor_pix.scaled(32, 32, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
-            self.setCursor(QtGui.QCursor(cursor_pix, 1, 1))
         self.worker = None
         self.scan_hardware()
 
