@@ -25,7 +25,7 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 import psutil
 from assets import PURPLE_TENTACLE_BASE64
 
-APP_VERSION = "0.0.3"
+APP_VERSION = "0.0.6"
 
 LOG_FILE = Path("system_hardware_inspector.log")
 logging.basicConfig(
