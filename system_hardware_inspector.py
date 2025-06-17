@@ -13,6 +13,7 @@ import platform
 import hashlib
 import json
 import logging
+import base64
 from datetime import date
 from pathlib import Path
 
@@ -22,8 +23,9 @@ from openai import AzureOpenAI
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 import psutil
+from assets import PURPLE_TENTACLE_BASE64
 
-APP_VERSION = "0.0.3"
+APP_VERSION = "0.0.6"
 
 LOG_FILE = Path("system_hardware_inspector.log")
 logging.basicConfig(
@@ -226,14 +228,6 @@ def get_motherboard_info() -> str:
     return "Motherboard information not available"
 
 
-def get_os_info() -> str:
-    """Return the user's operating system."""
-    system = platform.system()
-    release = platform.release()
-    version = platform.version()
-    return f"Sistema Operativo: {system} {release} ({version})"
-
-
 def gather_hardware_info() -> str:
     sections = [
         get_cpu_info(),
@@ -243,7 +237,6 @@ def gather_hardware_info() -> str:
         get_motherboard_info(),
     ]
     info = "\n\n".join(sections)
-    info += f"\n\n{get_os_info()}"
     return info
 
 
@@ -284,16 +277,24 @@ def _create_ai_client() -> AzureOpenAI:
         azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
     )
 
-
 SYSTEM_PROMPT = (
-    "Sos un asistente argentino con buena onda. Dedicado a ayudar a gamers con "
-    "presupuestos limitados. Tu tarea es recomendar mejoras al hardware actual "
-    "con una excelente relación costo-beneficio, priorizando componentes que se "
-    "consigan en Argentina. Evaluá CPU, GPU, RAM y almacenamiento. Indicá marcas, "
-    "modelos y gamas. Utiliza todas tus herramientas para dar el mejor consejo. "
-    "Haz tres recomendaciones sobre cada componente antiguo "
-    "Si el componente es nuevo y potente felicita al usuario "
+    "Actu\u00e1 como un asistente t\u00e9cnico especializado en hardware para PC Gamers. "
+    "Tu personalidad es canchera, habl\u00e1s en argentino y us\u00e1s un tono informal pero "
+    "profesional, como un amigo gamer que sabe much\u00edsimo de componentes. "
+    "Tu tarea es revisar la configuraci\u00f3n de hardware del usuario y, para cada "
+    "componente (CPU, GPU, RAM, motherboard, almacenamiento, fuente, gabinete, perif\u00e9ricos), "
+    "hacer una recomendaci\u00f3n basada en la mejor relaci\u00f3n precio/calidad del mercado actual. "
+    "Busc\u00e1 informaci\u00f3n actualizada en internet para hacer comparativas y sugerencias reales. "
+    "No repitas specs gen\u00e9ricos ni des recomendaciones vagas. No des precios. "
+    "Si el componente del usuario es de \u00faltima generaci\u00f3n o tope de gama "
+    "(por ejemplo, una RTX 5070 o un Ryzen 9 9950X), felicit\u00e1lo con onda (\"\u00a1Alta placa te compraste, pap\u00e1!\") y no le hagas recomendaciones para cambiarlo. "
+    "Pas\u00e1 directamente al siguiente componente. "
+    "Respond\u00e9 siempre de forma clara, en un solo bloque, con una recomendaci\u00f3n concreta por componente. "
+    "Ejemplo de tono: \"Che, esa placa de video est\u00e1 buena, pero por el mismo precio pod\u00e9s ir por una 4060 Ti que rinde m\u00e1s en 1080p. Si jug\u00e1s competitivo, te conviene esa. Ah, y no te olvides de una buena fuente que la banque, m\u00ednimo 600W 80 Plus.\" "
+    "Nunca uses lenguaje t\u00e9cnico complejo sin explicarlo de forma simple. "
+    "Arranc\u00e1 diciendo: \"Dale, vamos a ver qu\u00e9 ten\u00e9s en esa nave gamer...\""
 )
+
 
 
 def run_ai_analysis(hardware_info: str) -> str:
@@ -421,6 +422,14 @@ class MainWindow(QtWidgets.QMainWindow):
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
 
+        self.logo_label = QtWidgets.QLabel()
+        logo_pix = QtGui.QPixmap()
+        logo_pix.loadFromData(base64.b64decode(PURPLE_TENTACLE_BASE64))
+        if not logo_pix.isNull():
+            logo_pix = logo_pix.scaledToHeight(150, QtCore.Qt.SmoothTransformation)
+            self.logo_label.setPixmap(logo_pix)
+            self.logo_label.setAlignment(QtCore.Qt.AlignCenter)
+
         self.hardware_edit = QtWidgets.QTextEdit()
         self.hardware_edit.setReadOnly(True)
         self.hardware_edit.setStyleSheet("font-size: 14px;")
@@ -431,11 +440,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
         save_btn = QtWidgets.QPushButton("Guardar como TXT")
         self.ai_btn = QtWidgets.QPushButton("Analizar con Inteligencia Artificial")
-        btn_style = "font-size: 14px; padding: 8px;"
-        save_btn.setStyleSheet(btn_style)
-        self.ai_btn.setStyleSheet(
-            "background-color: #f39c12; color: white; font-size: 16px;"
+        btn_style = (
+            "QPushButton {"
+            "background-color: #70267a;"
+            "color: white;"
+            "font-size: 14px;"
+            "padding: 8px;"
+            "border-radius: 4px;"
+            "}"
+            "QPushButton:hover {"
+            "background-color: #a041cc;"
+            "}"
         )
+        save_btn.setStyleSheet(btn_style)
+        self.ai_btn.setStyleSheet(btn_style)
         self.ai_btn.setFixedHeight(50)
 
         save_btn.clicked.connect(self.save_to_txt)
@@ -452,12 +470,13 @@ class MainWindow(QtWidgets.QMainWindow):
         text_layout.addWidget(self.reco_edit)
 
         layout = QtWidgets.QVBoxLayout(central)
+        layout.addWidget(self.logo_label)
         layout.addLayout(button_layout)
         layout.addLayout(text_layout)
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setValue(0)
         self.progress_bar.setStyleSheet(
-            "QProgressBar::chunk { background-color: #f39c12; }"
+            "QProgressBar::chunk { background-color: #39FF14; }"
         )
         self.progress_label = QtWidgets.QLabel()
         self.progress_label.setStyleSheet("font-size: 12px; color: white;")
@@ -466,23 +485,23 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.ai_btn, alignment=QtCore.Qt.AlignRight)
         footer = QtWidgets.QLabel("By Clovhis")
         footer.setAlignment(QtCore.Qt.AlignCenter)
-        footer.setStyleSheet("color: #f39c12;")
+        footer.setStyleSheet("color: #39FF14;")
         layout.addWidget(footer)
 
     def set_dark_theme(self):
         palette = QtGui.QPalette()
-        palette.setColor(QtGui.QPalette.Window, QtGui.QColor(20, 20, 30))
+        palette.setColor(QtGui.QPalette.Window, QtGui.QColor("#301934"))
         palette.setColor(QtGui.QPalette.WindowText, QtCore.Qt.white)
-        palette.setColor(QtGui.QPalette.Base, QtGui.QColor(30, 30, 40))
-        palette.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor(45, 45, 60))
+        palette.setColor(QtGui.QPalette.Base, QtGui.QColor("#3d1e4d"))
+        palette.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor("#502565"))
         palette.setColor(QtGui.QPalette.ToolTipBase, QtCore.Qt.white)
         palette.setColor(QtGui.QPalette.ToolTipText, QtCore.Qt.white)
         palette.setColor(QtGui.QPalette.Text, QtCore.Qt.white)
-        palette.setColor(QtGui.QPalette.Button, QtGui.QColor(45, 45, 60))
+        palette.setColor(QtGui.QPalette.Button, QtGui.QColor("#502565"))
         palette.setColor(QtGui.QPalette.ButtonText, QtCore.Qt.white)
         palette.setColor(QtGui.QPalette.BrightText, QtCore.Qt.red)
-        palette.setColor(QtGui.QPalette.Link, QtGui.QColor(243, 156, 18))
-        palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor(243, 156, 18))
+        palette.setColor(QtGui.QPalette.Link, QtGui.QColor("#39FF14"))
+        palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor("#39FF14"))
         palette.setColor(QtGui.QPalette.HighlightedText, QtCore.Qt.black)
         self.setPalette(palette)
 
