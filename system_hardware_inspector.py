@@ -439,7 +439,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.reco_edit.setStyleSheet("font-size: 14px;")
 
         save_btn = QtWidgets.QPushButton("Guardar como TXT")
-        self.ai_btn = QtWidgets.QPushButton("Analizar con Inteligencia Artificial")
+        self.ai_btn = QtWidgets.QPushButton(
+            "Analizar con Inteligencia Artificial"
+        )
+        self.exit_btn = QtWidgets.QPushButton("Salir")
         btn_style = (
             "QPushButton {"
             "background-color: #70267a;"
@@ -454,13 +457,17 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         save_btn.setStyleSheet(btn_style)
         self.ai_btn.setStyleSheet(btn_style)
+        self.exit_btn.setStyleSheet(btn_style)
         self.ai_btn.setFixedHeight(50)
+        self.exit_btn.setFixedHeight(50)
 
         save_btn.clicked.connect(self.save_to_txt)
         self.ai_btn.clicked.connect(self.start_ai_analysis)
+        self.exit_btn.clicked.connect(QtWidgets.qApp.quit)
 
         save_btn.clicked.connect(lambda: self.animate_button(save_btn))
         self.ai_btn.clicked.connect(lambda: self.animate_button(self.ai_btn))
+        self.exit_btn.clicked.connect(lambda: self.animate_button(self.exit_btn))
 
         button_layout = QtWidgets.QHBoxLayout()
         button_layout.addWidget(save_btn)
@@ -483,6 +490,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.progress_label)
         layout.addWidget(self.ai_btn, alignment=QtCore.Qt.AlignRight)
+        layout.addWidget(self.exit_btn, alignment=QtCore.Qt.AlignRight)
         footer = QtWidgets.QLabel("By Clovhis")
         footer.setAlignment(QtCore.Qt.AlignCenter)
         footer.setStyleSheet("color: #39FF14;")
